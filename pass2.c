@@ -1,6 +1,6 @@
 /*	This file is part of the software similarity tester SIM.
 	Written by Dick Grune, Vrije Universiteit, Amsterdam.
-	$Id: pass2.c,v 2.20 2012-09-30 11:55:19 Gebruiker Exp $
+	$Id: pass2.c,v 2.23 2015-01-12 09:16:13 dick Exp $
 */
 
 #include	<stdio.h>
@@ -12,20 +12,18 @@
 #include	"lang.h"
 #include	"pass2.h"
 
-#undef	DB_POS
 #ifdef	DB_POS
 static void db_print_pos_list(const char *, const struct text *);
 static void db_print_lex(const char *);
 #endif
 
 static void pass2_txt(struct text *txt);
-static int next_eol_obtained(void);
 
 void
 Retrieve_Runs(void) {
 	int n;
 
-	for (n = 0; n < Number_Of_Texts; n++) {
+	for (n = 0; n < Number_of_Texts; n++) {
 		pass2_txt(&Text[n]);
 	}
 }
@@ -41,13 +39,13 @@ Retrieve_Runs(void) {
 static void
 pass2_txt(struct text *txt) {
 	struct position *pos;
-	unsigned int old_nl_cnt;
+	size_t old_nl_cnt;
 
 	if (!txt->tx_pos)	/* no need to scan the file */
 		return;
 
 	/* Open_Text() initializes lex_nl_cnt and lex_tk_cnt */
-	if (!Open_Text(Second, txt)) {
+	if (!Open_Text(Second_Pass, txt)) {
 		fprintf(stderr, ">>>> File %s disappeared <<<<\n",
 			txt->tx_fname
 		);
@@ -82,17 +80,22 @@ pass2_txt(struct text *txt) {
 		/* we scan the pos list and the file in parallel */
 
 		/* find the corresponding line */
-		while (pos->ps_tk_cnt > lex_tk_cnt) {	/* was >= ZZ */
+		while (pos->ps_tk_cnt >= lex_tk_cnt) {
 			/* pos does not refer to this line, try the next */
 
 			/* shift the administration */
 			old_nl_cnt = lex_nl_cnt;
 			/* and get the next eol position */
-			if (!next_eol_obtained()) {
-				/* ouch! not enough lines! */
-				fprintf(stderr, ">>>> File %s modified <<<<\n",
-					txt->tx_fname
-				);
+			if (!Next_Text_EOL_Obtained()) {
+				/* reached end of file without obtaining EOL */
+				if (!txt->tx_EOL_terminated) {
+					/* that's OK then */
+				} else {
+					fprintf(stderr,
+						">>>> File %s modified <<<<\n",
+						txt->tx_fname
+					);
+				}
 				break;
 			}
 #ifdef	DB_POS
@@ -118,17 +121,9 @@ pass2_txt(struct text *txt) {
 #endif	/* DB_POS */
 
 	/* Flush the flex buffers; it's easier than using YY_BUFFER_STATE. */
-	while (Next_Text_Token_Obtained(Second));
+	while (Next_Text_EOL_Obtained());
 
-	Close_Text(Second, txt);
-}
-
-static int
-next_eol_obtained(void) {
-	while (Next_Text_Token_Obtained(Second)) {
-		if (Token_EQ(lex_token, End_Of_Line)) return 1;
-	}
-	return 0;
+	Close_Text(Second_Pass, txt);
 }
 
 #ifdef	DB_POS
@@ -141,7 +136,7 @@ db_print_pos(const struct position *pos) {
 		pos->ps_tk_cnt
 	);
 	fprintf(Debug_File, ", line # = ");
-	if (pos->ps_nl_cnt == -1) {
+	if (pos->ps_nl_cnt == (size_t) -1) {
 		fprintf(Debug_File, "<NOT SET>");
 	}
 	else {

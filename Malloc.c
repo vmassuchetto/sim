@@ -1,6 +1,6 @@
 /*	This file is part of the memory management and leak detector MALLOC.
 	Written by Dick Grune, Vrije Universiteit, Amsterdam.
-	$Id: Malloc.c,v 1.7 2012-06-13 09:59:52 Gebruiker Exp $
+	$Id: Malloc.c,v 1.15 2014-01-27 11:22:39 Gebruiker Exp $
 */
 
 #include	<stdio.h>
@@ -8,7 +8,22 @@
 #include	<unistd.h>
 #include	<string.h>
 
+#include	"any_int.h"
 #include	"Malloc.h"
+
+/*Library module source prelude */
+#undef	_MALLOC_CODE_
+#ifndef	lint
+#define	_MALLOC_CODE_
+#endif
+#ifdef	LIB
+#define	_MALLOC_CODE_
+#endif
+
+#ifdef	_MALLOC_CODE_
+
+/* Library module source code */
+
 #undef	new
 #define	new		use_my_new	/* don't call Malloc in Malloc.c */
 #define	my_new(type)	((type *)malloc(sizeof (type)))
@@ -19,18 +34,16 @@
 #undef	putchar
 #define	putchar	use_fprintf
 
-#ifndef	lint
-
 static void
 fprintloc(FILE *f, const char *fname, int l_nmb) {
 	fprintf(f, "\"%s\", line %d: ", fname, l_nmb);
 }
 
 static void
-out_of_memory(const char *fname, int l_nmb, size_t size)  {
+out_of_memory(const char *fname, int l_nmb, size_t size) {
 	fprintloc(stderr, fname, l_nmb);
-	fprintf(stderr, "Out of memory, requested size = %lld\n",
-		(long long int)size);
+	fprintf(stderr, "Out of memory, requested size = %s bytes\n",
+		any_uint2string(size, 0));
 	exit(1);
 }
 
@@ -42,9 +55,9 @@ out_of_memory(const char *fname, int l_nmb, size_t size)  {
    would be too much.
 */
 
-static long long int total = 0;
-static long long int balance = 0;
-static long long int max = 0;
+static vlong_uint total = 0;
+static vlong_uint balance = 0;
+static vlong_uint max = 0;
 
 struct record {
 	struct record *next;
@@ -98,7 +111,7 @@ record_free(char *addr) {
 	struct record **oldp = record_pointer_for_address(addr);
 	struct record *old = *oldp;
 
-	if (old == 0) return -1;
+	if (old == 0) return (size_t) -1;
 
 	*oldp = old->next;/* this loses the struct record; is that a problem? */
 	balance -= old->size;
@@ -124,9 +137,9 @@ struct entry {
 	struct entry *next;
 	const char *fname;
 	int l_nmb;
-	int n_blocks;
+	unsigned int n_blocks;
 	int var_size;	/* all blocks have the same size or not */
-	int size;	/* !var_size: the one size; var_size: sum of sizes */
+	size_t size;	/* !var_size: the one size; var_size: sum of sizes */
 };
 
 static struct entry *
@@ -211,17 +224,23 @@ report_actual_leaks(FILE *f) {
 		);
 		if (e->var_size) {
 			/* e->size is the sum of the sizes */
-			fprintf(f, "%d on average",
-				 (e->size + e->n_blocks/2) / e->n_blocks
-			);
+			fprintf(f, "%s on average",
+				any_uint2string(
+					(e->size+e->n_blocks/2) / e->n_blocks,
+					0
+				));
+			if (e->n_blocks > 1) {
+				fprintf(f, " = %s",
+					any_uint2string(e->size, 0));
+			}
 		}
 		else {
 			/* e->size is the single size */
-			fprintf(f, "%d", e->size);
-		}
-		if (e->n_blocks > 1) {
-			fprintf(f, " = %d",
-				(e->var_size ? e->size : e->size*e->n_blocks));
+			fprintf(f, "%s", any_uint2string(e->size, 0));
+			if (e->n_blocks > 1) {
+				vlong_uint all = e->size*e->n_blocks;
+				fprintf(f, " = %s", any_uint2string(all, 0));
+			}
 		}
 		fprintf(f, "\n");
 
@@ -234,9 +253,9 @@ ReportMemoryLeaks(FILE *f) {
 	if (f == 0) f = stderr;
 	report_actual_leaks(f);
 
-	fprintf(f, "Total memory allocated= %lld", total);
-	fprintf(f, ", maximum allocated = %lld", max);
-	fprintf(f, ", garbage left = %lld", balance);
+	fprintf(f, "Total memory allocated = %s", any_uint2string(total, 0));
+	fprintf(f, ", maximum allocated = %s", any_uint2string(max, 0));
+	fprintf(f, ", garbage left = %s", any_uint2string(balance, 0));
 	fprintf(f, "\n");
 }
 
@@ -263,14 +282,14 @@ _leak_malloc(int chk, size_t size, const char *fname, int l_nmb) {
 
 #ifdef	MEMCLOBBER
 	MemClobber((char *)res, size);
-#endif
-#endif
+#endif	/* MEMCLOBBER */
+#endif	/* MEMLEAK || MEMCLOBBER */
 
 	return res;
 }
 
 void *
-_leak_calloc(int chk, int n, size_t size, const char *fname, int l_nmb) {
+_leak_calloc(int chk, size_t n, size_t size, const char *fname, int l_nmb) {
 	void *res = calloc(n, size);
 
 	if (chk && res == 0) {
@@ -280,7 +299,7 @@ _leak_calloc(int chk, int n, size_t size, const char *fname, int l_nmb) {
 
 #if	defined MEMLEAK || defined MEMCLOBBER
 	record_alloc(res, n*size, fname, l_nmb);
-#endif
+#endif	/* MEMLEAK || MEMCLOBBER */
 
 	return res;
 }
@@ -295,7 +314,7 @@ _leak_realloc(int chk, void *addr, size_t size, const char *fname, int l_nmb) {
 	if (	/* we are not reallocating address 0, which is allowed */
 		addr != 0
 	&&	/* the address was never handed out before */
-		old_size == -1
+		old_size == (size_t) -1
 	) {
 		fprintloc(stderr, fname, l_nmb);
 		fprintf(stderr, ">>>> unallocated block reallocated <<<<\n");
@@ -310,13 +329,13 @@ _leak_realloc(int chk, void *addr, size_t size, const char *fname, int l_nmb) {
 
 #if	defined MEMLEAK || defined MEMCLOBBER
 	record_alloc(res, size, fname, l_nmb);
-#endif
+#endif	/* MEMLEAK || MEMCLOBBER */
 
 #ifdef	MEMCLOBBER
 	if (old_size > 0 && size > old_size) {
 		MemClobber(((char *)res)+old_size, size-old_size);
 	}
-#endif
+#endif	/* MEMCLOBBER */
 
 	return res;
 }
@@ -328,7 +347,7 @@ _leak_free(void *addr, const char *fname, int l_nmb) {
 	size_t old_size = record_free(addr);
 
 	/* we report first, because the free() below may cause a crash */
-	if (old_size == -1) {
+	if (old_size == (size_t) -1) {
 		fprintloc(stderr, fname, l_nmb);
 		fprintf(stderr, ">>>> unallocated block freed ");
 		fprintf(stderr, "or multiple free of allocated block <<<<\n");
@@ -336,9 +355,9 @@ _leak_free(void *addr, const char *fname, int l_nmb) {
 	else {
 #ifdef	MEMCLOBBER
 	MemClobber((char *)addr, old_size);
-#endif
+#endif	/* MEMCLOBBER */
 	}
-#endif
+#endif	/* MEMLEAK || MEMCLOBBER */
 	free(addr);
 }
 
@@ -346,7 +365,9 @@ char *
 _new_string(const char *s, const char *fname, int l_nmb) {
 	return strcpy((char *)(_leak_malloc(1, strlen(s)+1, fname, l_nmb)), s);
 }
-#endif	/* not lint */
+
+/* End library module source code */
+#endif	/* _MALLOC_CODE_ */
 
 #ifdef	lint
 static void
@@ -359,8 +380,9 @@ satisfy_lint(void *x) {
 	_leak_free(x, 0, 0);
 
 	ReportMemoryLeaks(0);
+	MemClobber(v, 0);
 
 	v = _new_string(0, 0, 0);
 	satisfy_lint(v);
 }
-#endif
+#endif	/* lint */

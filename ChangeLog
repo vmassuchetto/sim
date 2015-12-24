@@ -1,3 +1,31 @@
+2014-02-17  Dick Grune  <Gebruiker@GEBRUIKER-PC>
+
+	* sim.c (is_new_old_separator): MinGW sometimes (?) interprets the /
+	as a command-line argument as a reference to the MinGW tree, which
+	makes the / unusable as a separator. Even escaping it ("/") does not
+	help. Added the | as a separator.
+
+2014-01-26  Dick Grune
+
+	*  %z from Marcus Brinkmann implemented by a routine size_t2string.
+
+2014-01-26  Dick Grune
+
+	*  Sizes on my present machine (HP 6730b laptop):
+	unsigned short int: 2
+	unsigned int: 4
+	unsigned long int: 4
+	unsigned long long int: 8
+
+2013-05-31  Dick Grune
+
+	*  (hash.c) Better hash2() function.
+
+2013-04-28  Dick Grune
+
+	*  Markus Brinkmann (marcus.brinkmann@ruhr-uni-bochum.de) supplied a
+	64-bit version. %z does not work on MinGW C.
+
 2012-11-28  Dick Grune
 
 	* newargs.c (recursive_args): Liqun Chen (liqun.chen@hp.com)
@@ -661,5 +689,5 @@
 
 #	This file is part of the software similarity tester SIM.
 #	Written by Dick Grune, Vrije Universiteit, Amsterdam.
-#	$Id: ChangeLog,v 2.21 2012-11-28 20:49:51 Gebruiker Exp $
+#	$Id: ChangeLog,v 2.25 2014-02-17 11:21:39 dick Exp $
 #

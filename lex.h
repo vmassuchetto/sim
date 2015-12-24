@@ -1,6 +1,6 @@
 /*	This file is part of the software similarity tester SIM.
 	Written by Dick Grune, Vrije Universiteit, Amsterdam.
-	$Id: lex.h,v 2.12 2012-09-30 11:55:19 Gebruiker Exp $
+	$Id: lex.h,v 2.12 2012-09-30 11:55:19 dick Exp $
 */
 
 /* Macros for the *lang.l files */
